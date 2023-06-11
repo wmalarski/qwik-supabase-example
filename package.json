@@ -1,0 +1,62 @@
+{
+  "name": "my-qwik-basic-starter",
+  "description": "Recommended for your first Qwik app",
+  "engines": {
+    "node": ">=15.0.0"
+  },
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "-------BUILD-------": "",
+    "build": "qwik build",
+    "build.client": "vite build",
+    "build.preview": "vite build --ssr src/entry.preview.tsx",
+    "build.types": "tsc --incremental --noEmit",
+    "-------DEV-------": "",
+    "dev": "vite --mode ssr",
+    "dev.debug": "node --inspect-brk ./node_modules/vite/bin/vite.js --mode ssr --force",
+    "-------LINT-------": "",
+    "fmt": "prettier --write .",
+    "fmt.check": "prettier --check .",
+    "fmt.tsc": "tsc --noEmit",
+    "lint": "eslint src --ext \".js,.ts,.tsx\" --fix",
+    "-------PREVIEW-------": "",
+    "preview": "qwik build preview && vite preview --open",
+    "start": "vite --open --mode ssr",
+    "qwik": "qwik"
+  },
+  "devDependencies": {
+    "@builder.io/qwik": "1.1.4",
+    "@builder.io/qwik-city": "1.1.4",
+    "@types/cookie": "^0.5.1",
+    "@types/eslint": "8.40.0",
+    "@types/node": "latest",
+    "@typescript-eslint/eslint-plugin": "5.59.8",
+    "@typescript-eslint/parser": "5.59.8",
+    "autoprefixer": "^10.4.14",
+    "eslint": "8.41.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-import-resolver-node": "^0.3.7",
+    "eslint-import-resolver-typescript": "^3.5.5",
+    "eslint-plugin-import": "^2.27.5",
+    "eslint-plugin-jsx-a11y": "^6.7.1",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "eslint-plugin-qwik": "1.1.4",
+    "eslint-plugin-sort-keys-fix": "^1.1.2",
+    "eslint-plugin-tailwindcss": "^3.12.1",
+    "node-fetch": "3.3.1",
+    "postcss": "^8.4.24",
+    "prettier": "2.8.8",
+    "tailwindcss": "^3.3.2",
+    "typescript": "5.0.4",
+    "vite": "4.3.9",
+    "vite-tsconfig-paths": "4.2.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.24.0",
+    "cookie": "^0.5.0",
+    "daisyui": "^2.52.0",
+    "undici": "^5.22.1"
+  }
+}
