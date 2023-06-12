@@ -1,9 +1,12 @@
 import type { RequestEventCommon } from "@builder.io/qwik-city";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "./types";
 
 const supabaseMapKey = "__supabase";
 
-export const createSupabase = (event: RequestEventCommon): SupabaseClient => {
+export const createSupabase = (
+  event: RequestEventCommon
+): SupabaseClient<Database> => {
   const cached = event.sharedMap.get(supabaseMapKey);
 
   if (cached) {
@@ -17,7 +20,9 @@ export const createSupabase = (event: RequestEventCommon): SupabaseClient => {
     throw new Error("NO ENV VARIABLES");
   }
 
-  const client = createClient(url, key, { auth: { persistSession: false } });
+  const client = createClient<Database>(url, key, {
+    auth: { persistSession: false },
+  });
 
   event.sharedMap.set(supabaseMapKey, client);
 
