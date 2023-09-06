@@ -129,7 +129,7 @@ export const serverSupabaseQrl = <
 
       const result = await supabase.auth.signInWithOAuth({
         options: { redirectTo: config.emailRedirectTo },
-        ...data,
+        provider: data.provider as Provider,
       });
 
       if (result.error) {
@@ -142,7 +142,7 @@ export const serverSupabaseQrl = <
       throw event.redirect(302, result.data.url);
     },
     zod$({
-      provider: z.string().transform((provider) => provider as Provider),
+      provider: z.string(),
     }),
   );
 
