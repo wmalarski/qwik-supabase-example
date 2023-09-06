@@ -18,12 +18,10 @@ export const ProtectedHeader = component$(() => {
         <li class="marker:accent-current">
           <Link href={paths.board}>Board</Link>
         </li>
-        <li class="marker:accent-current">
-          <Form action={signOut}>
-            <button class="btn">Sign Out</button>
-          </Form>
-        </li>
       </ul>
+      <Form action={signOut}>
+        <button class="btn">Sign Out</button>
+      </Form>
     </header>
   );
 });

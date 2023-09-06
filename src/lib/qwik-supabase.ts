@@ -1,6 +1,6 @@
 /* eslint-disable qwik/loader-location */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { $, implicit$FirstArg, type QRL } from "@builder.io/qwik";
+import { implicit$FirstArg, type QRL } from "@builder.io/qwik";
 import {
   globalAction$,
   z,
@@ -17,7 +17,10 @@ import {
   type SupabaseClient,
   type SupabaseClientOptions,
 } from "@supabase/supabase-js";
-import type { GenericSchema } from "@supabase/supabase-js/dist/module/lib/types";
+import type {
+  GenericSchema,
+  SupabaseAuthClientOptions,
+} from "@supabase/supabase-js/dist/module/lib/types";
 
 export type QwikSupabaseConfig<SchemaName> = {
   supabaseUrl: string;
@@ -41,13 +44,29 @@ const options: CookieOptions = {
 
 const updateAuthCookies = (
   event: RequestEventCommon,
-  session: Pick<Session, "refresh_token" | "expires_in" | "access_token">
+  session: Pick<Session, "refresh_token" | "expires_in" | "access_token">,
 ) => {
   event.cookie.set(cookieName, session, options);
 };
 
 const removeAuthCookies = (event: RequestEventCommon) => {
   event.cookie.delete(cookieName, options);
+};
+
+export const getCookieStorage = (
+  event: RequestEventCommon,
+): SupabaseAuthClientOptions["storage"] => {
+  return {
+    getItem(key: string): string | Promise<string | null> | null {
+      return event.cookie.get(key)?.json() || null;
+    },
+    removeItem(key: string): void | Promise<void> {
+      event.cookie.delete(key, options);
+    },
+    setItem(key: string, value: string): void | Promise<void> {
+      event.cookie.set(key, value, options);
+    },
+  };
 };
 
 export const serverSupabaseQrl = <
@@ -57,29 +76,21 @@ export const serverSupabaseQrl = <
     : string & keyof Database,
   Schema extends GenericSchema = Database[SchemaName] extends GenericSchema
     ? Database[SchemaName]
-    : any
+    : any,
 >(
   supabaseOptions: QRL<
     (
-      ev: RequestEventCommon
+      ev: RequestEventCommon,
     ) =>
       | QwikSupabaseConfig<SchemaName>
       | Promise<QwikSupabaseConfig<SchemaName>>
-  >
+  >,
 ) => {
-  const getSupabaseInstance = (
-    request: RequestEventCommon
-  ): SupabaseClient<Database, SchemaName, Schema> => {
+  type Supabase = SupabaseClient<Database, SchemaName, Schema>;
+
+  const getSupabaseInstance = (request: RequestEventCommon): Supabase => {
     return request.sharedMap.get(supabaseSharedKey);
   };
-
-  const getSupabaseInstance$ = $(
-    (
-      request: RequestEventCommon
-    ): SupabaseClient<Database, SchemaName, Schema> => {
-      return request.sharedMap.get(supabaseSharedKey);
-    }
-  );
 
   const getSupabaseSession = (request: RequestEventCommon): Session | null => {
     return request.sharedMap.get(sessionSharedKey);
@@ -89,7 +100,7 @@ export const serverSupabaseQrl = <
     async (data, event) => {
       const config = await supabaseOptions(event);
 
-      const supabase = await getSupabaseInstance$(event);
+      const supabase = event.sharedMap.get(supabaseSharedKey) as Supabase;
 
       const result = await supabase.auth.signInWithPassword(data);
 
@@ -107,14 +118,14 @@ export const serverSupabaseQrl = <
     zod$({
       email: z.string().email(),
       password: z.string(),
-    })
+    }),
   );
 
   const useSupabaseSignInWithOAuth = globalAction$(
     async (data, event) => {
       const config = await supabaseOptions(event);
 
-      const supabase = await getSupabaseInstance$(event);
+      const supabase = event.sharedMap.get(supabaseSharedKey) as Supabase;
 
       const result = await supabase.auth.signInWithOAuth({
         options: { redirectTo: config.emailRedirectTo },
@@ -132,14 +143,14 @@ export const serverSupabaseQrl = <
     },
     zod$({
       provider: z.string().transform((provider) => provider as Provider),
-    })
+    }),
   );
 
   const useSupabaseSignInWithOtp = globalAction$(
     async (data, event) => {
       const config = await supabaseOptions(event);
 
-      const supabase = await getSupabaseInstance$(event);
+      const supabase = event.sharedMap.get(supabaseSharedKey) as Supabase;
 
       const result = await supabase.auth.signInWithOtp({
         options: { emailRedirectTo: config.emailRedirectTo },
@@ -158,17 +169,19 @@ export const serverSupabaseQrl = <
 
         throw event.redirect(302, config.signInRedirectTo);
       }
+
+      event.json(200, result.data);
     },
     zod$({
       email: z.string(),
-    })
+    }),
   );
 
   const useSupabaseSignUp = globalAction$(
     async (data, event) => {
       const config = await supabaseOptions(event);
 
-      const supabase = await getSupabaseInstance$(event);
+      const supabase = event.sharedMap.get(supabaseSharedKey) as Supabase;
 
       const result = await supabase.auth.signUp({
         options: { emailRedirectTo: config.emailRedirectTo },
@@ -189,7 +202,7 @@ export const serverSupabaseQrl = <
     zod$({
       email: z.string(),
       password: z.string(),
-    })
+    }),
   );
 
   const useSupabaseSignOut = globalAction$(async (_data, event) => {
@@ -205,8 +218,6 @@ export const serverSupabaseQrl = <
       return;
     }
 
-    console.log("event", event);
-
     const config = await supabaseOptions(event);
 
     const supabase = createClient<Database, SchemaName, Schema>(
@@ -214,17 +225,34 @@ export const serverSupabaseQrl = <
       config.supabaseKey,
       {
         ...config.options,
-        auth: { persistSession: false, ...config.options?.auth },
-      }
+        auth: {
+          flowType: "pkce",
+          persistSession: false,
+          storage: getCookieStorage(event),
+          ...config.options?.auth,
+        },
+      },
     );
 
     event.sharedMap.set(supabaseSharedKey, supabase);
 
-    console.log("search", event.url.search);
+    if (event.url.href.startsWith(config.emailRedirectTo)) {
+      const code = event.url.searchParams.get("code");
+
+      if (!code) {
+        throw event.error(400, "Invalid request");
+      }
+
+      const tokenResponse = await supabase.auth.exchangeCodeForSession(code);
+      if (tokenResponse.error) {
+        throw event.error(400, "Invalid request");
+      }
+
+      updateAuthCookies(event, tokenResponse.data.session);
+      throw event.redirect(302, config.signInRedirectTo);
+    }
 
     const value = event.cookie.get(cookieName)?.json();
-
-    console.log("value", value);
 
     const parsed = z
       .object({ access_token: z.string(), refresh_token: z.string() })

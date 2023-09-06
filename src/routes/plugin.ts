@@ -1,5 +1,6 @@
 import { z } from "@builder.io/qwik-city";
 import { serverSupabase$ } from "~/lib/qwik-supabase";
+import { getBaseUrl } from "~/utils/getBaseUrl";
 
 export const {
   getSupabaseInstance,
@@ -19,8 +20,7 @@ export const {
     });
 
   return {
-    emailRedirectTo: "/auth/callback",
-    options: { auth: { flowType: "pkce" } },
+    emailRedirectTo: `${getBaseUrl()}/auth/callback`,
     signInPath: "/auth/signIn",
     signInRedirectTo: "/",
     supabaseKey: parsed.supabaseKey,
