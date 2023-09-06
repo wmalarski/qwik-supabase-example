@@ -3,11 +3,15 @@ import { serverSupabase$ } from "~/lib/qwik-supabase";
 
 export const {
   getSupabaseInstance,
+  getSupabaseSession,
   onRequest,
+  useSupabaseSession,
   useSupabaseSetSession,
+  useSupabaseSignInWithOAuth,
+  useSupabaseSignInWithOtp,
   useSupabaseSignInWithPassword,
   useSupabaseSignOut,
-  useSupabaseUser,
+  useSupabaseSignUp,
 } = serverSupabase$(async (event) => {
   const parsed = await z
     .object({ supabaseKey: z.string(), supabaseUrl: z.string() })

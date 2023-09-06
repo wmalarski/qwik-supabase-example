@@ -17,7 +17,6 @@ import {
   type Session,
   type SupabaseClient,
   type SupabaseClientOptions,
-  type User,
 } from "@supabase/supabase-js";
 import type { GenericSchema } from "@supabase/supabase-js/dist/module/lib/types";
 
@@ -252,6 +251,59 @@ export const serverSupabaseQrl = <
     )
   );
 
+  const useSupabaseSignUp = globalAction$(
+    async (data, event) => {
+      const supabase = event.sharedMap.get("supabase") as SupabaseClient<
+        Database,
+        SchemaName,
+        Schema
+      >;
+
+      const result = await supabase.auth.signUp(data);
+
+      if (result.error || !result.data.session) {
+        const status = result.error?.status || 400;
+        return event.fail(status, {
+          formErrors: [result.error?.message],
+        });
+      }
+
+      updateAuthCookies(event, result.data.session);
+
+      if (data.redirectTo) {
+        throw event.redirect(302, data.redirectTo);
+      }
+    },
+    zod$(
+      z.union([
+        z.object({
+          email: z.string(),
+          options: z
+            .object({
+              captchaToken: z.string().optional(),
+              data: z.any().optional(),
+              emailRedirectTo: z.string().optional(),
+            })
+            .optional(),
+          password: z.string(),
+          redirectTo: z.string().optional(),
+        }),
+        z.object({
+          options: z
+            .object({
+              captchaToken: z.string().optional(),
+              channel: z.union([z.literal("sms"), z.literal("whatsapp")]),
+              data: z.any().optional(),
+            })
+            .optional(),
+          password: z.string(),
+          phone: z.string(),
+          redirectTo: z.string().optional(),
+        }),
+      ])
+    )
+  );
+
   const useSupabaseSetSession = globalAction$(
     (data, event) => {
       updateAuthCookies(event, data);
@@ -276,14 +328,18 @@ export const serverSupabaseQrl = <
     })
   );
 
-  const useSupabaseUser = routeLoader$((request) => {
-    return request.sharedMap.get("user") as User | null;
+  const useSupabaseSession = routeLoader$((request) => {
+    return request.sharedMap.get(sessionSharedKey) as Session | null;
   });
 
   const getSupabaseInstance = (
     request: RequestEventCommon
   ): SupabaseClient<Database, SchemaName, Schema> => {
     return request.sharedMap.get(supabaseSharedKey);
+  };
+
+  const getSupabaseSession = (request: RequestEventCommon): Session | null => {
+    return request.sharedMap.get(sessionSharedKey);
   };
 
   const onRequest = async (event: RequestEvent) => {
@@ -336,7 +392,9 @@ export const serverSupabaseQrl = <
 
   return {
     getSupabaseInstance,
+    getSupabaseSession,
     onRequest,
+    useSupabaseSession,
     useSupabaseSetSession,
     useSupabaseSignInWithIdToken,
     useSupabaseSignInWithOAuth,
@@ -344,7 +402,7 @@ export const serverSupabaseQrl = <
     useSupabaseSignInWithPassword,
     useSupabaseSignInWithSSO,
     useSupabaseSignOut,
-    useSupabaseUser,
+    useSupabaseSignUp,
   };
 };
 
