@@ -7,6 +7,7 @@ import { paths } from "~/utils/paths";
 export const useSignInGoogleAction = globalAction$(async (_data, event) => {
   const supabase = createSupabase(event);
 
+  console.log("supabase.auth.signInWithOAuth");
   const result = await supabase.auth.signInWithOAuth({
     options: { redirectTo: `${getBaseUrl()}${paths.callback}` },
     provider: "google",

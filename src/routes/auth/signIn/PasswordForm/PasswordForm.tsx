@@ -8,6 +8,7 @@ export const useSignInPasswordAction = globalAction$(
   async (data, event) => {
     const supabase = createSupabase(event);
 
+    console.log("supabase.auth.signInWithPassword");
     const result = await supabase.auth.signInWithPassword(data);
 
     if (result.error || !result.data.session) {

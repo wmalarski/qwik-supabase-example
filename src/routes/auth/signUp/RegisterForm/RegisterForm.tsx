@@ -10,6 +10,7 @@ export const useSignUpAction = globalAction$(
 
     const supabase = createSupabase(event);
 
+    console.log("supabase.auth.signUp");
     const result = await supabase.auth.signUp({
       ...data,
       options: { emailRedirectTo },

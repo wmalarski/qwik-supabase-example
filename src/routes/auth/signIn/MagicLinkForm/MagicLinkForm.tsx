@@ -8,6 +8,7 @@ export const useSignInOtpAction = globalAction$(
   async (data, event) => {
     const supabase = createSupabase(event);
 
+    console.log("supabase.auth.signInWithOtp");
     const result = await supabase.auth.signInWithOtp({
       email: data.email,
       options: { emailRedirectTo: `${getBaseUrl()}${paths.callback}` },

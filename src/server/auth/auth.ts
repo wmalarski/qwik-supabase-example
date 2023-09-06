@@ -39,12 +39,14 @@ const getUserByCookie = async (event: RequestEventCommon) => {
 
   const supabase = createSupabase(event);
 
+  console.log("supabase.auth.setSession");
   const userResponse = await supabase.auth.setSession(parsed.data);
 
   if (userResponse.data.user) {
     return userResponse.data.user;
   }
 
+  console.log("supabase.auth.refreshSession");
   const refreshResponse = await supabase.auth.refreshSession({
     refresh_token: parsed.data.refresh_token,
   });
