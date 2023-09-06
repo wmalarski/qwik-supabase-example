@@ -31,26 +31,14 @@ export type QwikSupabaseConfig<SchemaName> = {
   signInPath: string;
 };
 
-const cookieName = "_session";
-const sessionSharedKey = "session";
-const supabaseSharedKey = "supabase";
+const sessionSharedKey = "__session";
+const supabaseSharedKey = "__supabase";
 
 const options: CookieOptions = {
   httpOnly: true,
   maxAge: 610000,
   path: "/",
   sameSite: "lax",
-};
-
-const updateAuthCookies = (
-  event: RequestEventCommon,
-  session: Pick<Session, "refresh_token" | "expires_in" | "access_token">,
-) => {
-  event.cookie.set(cookieName, session, options);
-};
-
-const removeAuthCookies = (event: RequestEventCommon) => {
-  event.cookie.delete(cookieName, options);
 };
 
 export const getCookieStorage = (
@@ -111,8 +99,6 @@ export const serverSupabaseQrl = <
         });
       }
 
-      updateAuthCookies(event, result.data.session);
-
       throw event.redirect(302, config.signInRedirectTo);
     },
     zod$({
@@ -165,8 +151,6 @@ export const serverSupabaseQrl = <
       }
 
       if (result.data.session) {
-        updateAuthCookies(event, result.data.session);
-
         throw event.redirect(302, config.signInRedirectTo);
       }
 
@@ -193,10 +177,6 @@ export const serverSupabaseQrl = <
         return event.fail(status, { formErrors: [result.error.message] });
       }
 
-      if (result.data.session) {
-        updateAuthCookies(event, result.data.session);
-      }
-
       throw event.redirect(302, config.signInPath);
     },
     zod$({
@@ -208,7 +188,9 @@ export const serverSupabaseQrl = <
   const useSupabaseSignOut = globalAction$(async (_data, event) => {
     const config = await supabaseOptions(event);
 
-    removeAuthCookies(event);
+    const supabase = event.sharedMap.get(supabaseSharedKey) as Supabase;
+
+    await supabase.auth.signOut();
 
     throw event.redirect(302, config.signInPath);
   });
@@ -227,7 +209,6 @@ export const serverSupabaseQrl = <
         ...config.options,
         auth: {
           flowType: "pkce",
-          persistSession: false,
           storage: getCookieStorage(event),
           ...config.options?.auth,
         },
@@ -248,40 +229,12 @@ export const serverSupabaseQrl = <
         throw event.error(400, "Invalid request");
       }
 
-      updateAuthCookies(event, tokenResponse.data.session);
       throw event.redirect(302, config.signInRedirectTo);
     }
 
-    const value = event.cookie.get(cookieName)?.json();
+    const session = await supabase.auth.getSession();
 
-    const parsed = z
-      .object({ access_token: z.string(), refresh_token: z.string() })
-      .safeParse(value);
-
-    if (!parsed.success) {
-      return;
-    }
-
-    const userResponse = await supabase.auth.setSession(parsed.data);
-
-    if (userResponse.data.session) {
-      event.sharedMap.set(sessionSharedKey, userResponse.data.session);
-      return;
-    }
-
-    const refreshResponse = await supabase.auth.refreshSession({
-      refresh_token: parsed.data.refresh_token,
-    });
-
-    if (!refreshResponse.data.session) {
-      removeAuthCookies(event);
-      return;
-    }
-
-    const session = refreshResponse.data.session;
-    updateAuthCookies(event, session);
-
-    event.sharedMap.set(sessionSharedKey, session);
+    event.sharedMap.set(sessionSharedKey, session.data.session);
   };
 
   return {
