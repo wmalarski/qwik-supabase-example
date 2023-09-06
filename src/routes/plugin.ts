@@ -17,6 +17,7 @@ export const {
     });
 
   return {
+    options: { auth: { flowType: "pkce" } },
     supabaseKey: parsed.supabaseKey,
     supabaseUrl: parsed.supabaseUrl,
   };
