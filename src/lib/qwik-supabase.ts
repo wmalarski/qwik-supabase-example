@@ -1,9 +1,8 @@
 /* eslint-disable qwik/loader-location */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { implicit$FirstArg, type QRL } from "@builder.io/qwik";
+import { $, implicit$FirstArg, type QRL } from "@builder.io/qwik";
 import {
   globalAction$,
-  routeLoader$,
   z,
   zod$,
   type CookieOptions,
@@ -24,6 +23,9 @@ export type QwikSupabaseConfig<SchemaName> = {
   supabaseUrl: string;
   supabaseKey: string;
   options?: SupabaseClientOptions<SchemaName>;
+  emailRedirectTo: string;
+  signInRedirectTo: string;
+  signInPath: string;
 };
 
 const cookieName = "_session";
@@ -65,13 +67,29 @@ export const serverSupabaseQrl = <
       | Promise<QwikSupabaseConfig<SchemaName>>
   >
 ) => {
+  const getSupabaseInstance = (
+    request: RequestEventCommon
+  ): SupabaseClient<Database, SchemaName, Schema> => {
+    return request.sharedMap.get(supabaseSharedKey);
+  };
+
+  const getSupabaseInstance$ = $(
+    (
+      request: RequestEventCommon
+    ): SupabaseClient<Database, SchemaName, Schema> => {
+      return request.sharedMap.get(supabaseSharedKey);
+    }
+  );
+
+  const getSupabaseSession = (request: RequestEventCommon): Session | null => {
+    return request.sharedMap.get(sessionSharedKey);
+  };
+
   const useSupabaseSignInWithPassword = globalAction$(
     async (data, event) => {
-      const supabase = event.sharedMap.get("supabase") as SupabaseClient<
-        Database,
-        SchemaName,
-        Schema
-      >;
+      const config = await supabaseOptions(event);
+
+      const supabase = await getSupabaseInstance$(event);
 
       const result = await supabase.auth.signInWithPassword(data);
 
@@ -84,58 +102,24 @@ export const serverSupabaseQrl = <
 
       updateAuthCookies(event, result.data.session);
 
-      if (data.redirectTo) {
-        throw event.redirect(302, data.redirectTo);
-      }
+      throw event.redirect(302, config.signInRedirectTo);
     },
     zod$({
       email: z.string().email(),
       password: z.string(),
-      redirectTo: z.string().optional(),
-    })
-  );
-
-  const useSupabaseSignInWithIdToken = globalAction$(
-    async (data, event) => {
-      const supabase = event.sharedMap.get("supabase") as SupabaseClient<
-        Database,
-        SchemaName,
-        Schema
-      >;
-
-      const result = await supabase.auth.signInWithIdToken(data);
-
-      if (result.error || !result.data.session) {
-        const status = result.error?.status || 400;
-        return event.fail(status, {
-          formErrors: [result.error?.message],
-        });
-      }
-
-      updateAuthCookies(event, result.data.session);
-
-      if (data.redirectTo) {
-        throw event.redirect(302, data.redirectTo);
-      }
-    },
-    zod$({
-      nonce: z.string().optional(),
-      options: z.object({ captchaToken: z.string().optional() }).optional(),
-      provider: z.union([z.literal("google"), z.literal("apple")]),
-      redirectTo: z.string().optional(),
-      token: z.string(),
     })
   );
 
   const useSupabaseSignInWithOAuth = globalAction$(
     async (data, event) => {
-      const supabase = event.sharedMap.get("supabase") as SupabaseClient<
-        Database,
-        SchemaName,
-        Schema
-      >;
+      const config = await supabaseOptions(event);
 
-      const result = await supabase.auth.signInWithOAuth(data);
+      const supabase = await getSupabaseInstance$(event);
+
+      const result = await supabase.auth.signInWithOAuth({
+        options: { redirectTo: config.emailRedirectTo },
+        ...data,
+      });
 
       if (result.error) {
         const status = result.error?.status || 400;
@@ -147,76 +131,20 @@ export const serverSupabaseQrl = <
       throw event.redirect(302, result.data.url);
     },
     zod$({
-      options: z
-        .object({
-          queryParams: z.record(z.string()).optional(),
-          redirectTo: z.string().optional(),
-          scopes: z.string().optional(),
-          skipBrowserRedirect: z.boolean().optional(),
-        })
-        .optional(),
       provider: z.string().transform((provider) => provider as Provider),
     })
   );
 
   const useSupabaseSignInWithOtp = globalAction$(
     async (data, event) => {
-      const supabase = event.sharedMap.get("supabase") as SupabaseClient<
-        Database,
-        SchemaName,
-        Schema
-      >;
+      const config = await supabaseOptions(event);
 
-      const result = await supabase.auth.signInWithOtp(data);
+      const supabase = await getSupabaseInstance$(event);
 
-      if (result.error || !result.data.session) {
-        const status = result.error?.status || 400;
-        return event.fail(status, {
-          formErrors: [result.error?.message],
-        });
-      }
-
-      updateAuthCookies(event, result.data.session);
-
-      if (data.redirectTo) {
-        throw event.redirect(302, data.redirectTo);
-      }
-    },
-    zod$(
-      z.union([
-        z.object({
-          email: z.string(),
-          options: z.object({
-            captchaToken: z.string().optional(),
-            data: z.any(),
-            emailRedirectTo: z.string().optional(),
-            shouldCreateUser: z.boolean().optional(),
-          }),
-          redirectTo: z.string().optional(),
-        }),
-        z.object({
-          options: z.object({
-            captchaToken: z.string().optional(),
-            channel: z.union([z.literal("sms"), z.literal("whatsapp")]),
-            data: z.any(),
-            shouldCreateUser: z.boolean().optional(),
-          }),
-          phone: z.string(),
-          redirectTo: z.string().optional(),
-        }),
-      ])
-    )
-  );
-
-  const useSupabaseSignInWithSSO = globalAction$(
-    async (data, event) => {
-      const supabase = event.sharedMap.get("supabase") as SupabaseClient<
-        Database,
-        SchemaName,
-        Schema
-      >;
-
-      const result = await supabase.auth.signInWithSSO(data);
+      const result = await supabase.auth.signInWithOtp({
+        options: { emailRedirectTo: config.emailRedirectTo },
+        ...data,
+      });
 
       if (result.error) {
         const status = result.error?.status || 400;
@@ -225,182 +153,116 @@ export const serverSupabaseQrl = <
         });
       }
 
-      throw event.redirect(302, result.data.url);
+      if (result.data.session) {
+        updateAuthCookies(event, result.data.session);
+
+        throw event.redirect(302, config.signInRedirectTo);
+      }
     },
-    zod$(
-      z.union([
-        z.object({
-          options: z
-            .object({
-              captchaToken: z.string().optional(),
-              redirectTo: z.string().optional(),
-            })
-            .optional(),
-          providerId: z.string(),
-        }),
-        z.object({
-          domain: z.string(),
-          options: z
-            .object({
-              captchaToken: z.string().optional(),
-              redirectTo: z.string().optional(),
-            })
-            .optional(),
-        }),
-      ])
-    )
+    zod$({
+      email: z.string(),
+    })
   );
 
   const useSupabaseSignUp = globalAction$(
     async (data, event) => {
-      const supabase = event.sharedMap.get("supabase") as SupabaseClient<
-        Database,
-        SchemaName,
-        Schema
-      >;
-
-      const result = await supabase.auth.signUp(data);
-
-      if (result.error || !result.data.session) {
-        const status = result.error?.status || 400;
-        return event.fail(status, {
-          formErrors: [result.error?.message],
-        });
-      }
-
-      updateAuthCookies(event, result.data.session);
-
-      if (data.redirectTo) {
-        throw event.redirect(302, data.redirectTo);
-      }
-    },
-    zod$(
-      z.union([
-        z.object({
-          email: z.string(),
-          options: z
-            .object({
-              captchaToken: z.string().optional(),
-              data: z.any().optional(),
-              emailRedirectTo: z.string().optional(),
-            })
-            .optional(),
-          password: z.string(),
-          redirectTo: z.string().optional(),
-        }),
-        z.object({
-          options: z
-            .object({
-              captchaToken: z.string().optional(),
-              channel: z.union([z.literal("sms"), z.literal("whatsapp")]),
-              data: z.any().optional(),
-            })
-            .optional(),
-          password: z.string(),
-          phone: z.string(),
-          redirectTo: z.string().optional(),
-        }),
-      ])
-    )
-  );
-
-  const useSupabaseSetSession = globalAction$(
-    (data, event) => {
-      updateAuthCookies(event, data);
-    },
-    zod$({
-      access_token: z.string(),
-      expires_in: z.coerce.number(),
-      refresh_token: z.string(),
-    })
-  );
-
-  const useSupabaseSignOut = globalAction$(
-    (data, event) => {
-      removeAuthCookies(event);
-
-      if (data.redirectTo) {
-        throw event.redirect(302, data.redirectTo);
-      }
-    },
-    zod$({
-      redirectTo: z.string().optional(),
-    })
-  );
-
-  const useSupabaseSession = routeLoader$((request) => {
-    return request.sharedMap.get(sessionSharedKey) as Session | null;
-  });
-
-  const getSupabaseInstance = (
-    request: RequestEventCommon
-  ): SupabaseClient<Database, SchemaName, Schema> => {
-    return request.sharedMap.get(supabaseSharedKey);
-  };
-
-  const getSupabaseSession = (request: RequestEventCommon): Session | null => {
-    return request.sharedMap.get(sessionSharedKey);
-  };
-
-  const onRequest = async (event: RequestEvent) => {
-    if (isServer) {
       const config = await supabaseOptions(event);
 
-      const supabase = createClient<Database, SchemaName, Schema>(
-        config.supabaseUrl,
-        config.supabaseKey,
-        {
-          ...config.options,
-          auth: { persistSession: false, ...config.options?.auth },
-        }
-      );
+      const supabase = await getSupabaseInstance$(event);
 
-      event.sharedMap.set(supabaseSharedKey, supabase);
-
-      const value = event.cookie.get(cookieName)?.json();
-
-      const parsed = z
-        .object({ access_token: z.string(), refresh_token: z.string() })
-        .safeParse(value);
-
-      if (!parsed.success) {
-        return;
-      }
-
-      const userResponse = await supabase.auth.setSession(parsed.data);
-
-      if (userResponse.data.session) {
-        event.sharedMap.set(sessionSharedKey, userResponse.data.session);
-        return;
-      }
-
-      const refreshResponse = await supabase.auth.refreshSession({
-        refresh_token: parsed.data.refresh_token,
+      const result = await supabase.auth.signUp({
+        options: { emailRedirectTo: config.emailRedirectTo },
+        ...data,
       });
 
-      if (!refreshResponse.data.session) {
-        removeAuthCookies(event);
-        return;
+      if (result.error) {
+        const status = result.error.status || 400;
+        return event.fail(status, { formErrors: [result.error.message] });
       }
 
-      const session = refreshResponse.data.session;
-      updateAuthCookies(event, session);
+      if (result.data.session) {
+        updateAuthCookies(event, result.data.session);
+      }
 
-      event.sharedMap.set(sessionSharedKey, session);
+      throw event.redirect(302, config.signInPath);
+    },
+    zod$({
+      email: z.string(),
+      password: z.string(),
+    })
+  );
+
+  const useSupabaseSignOut = globalAction$(async (_data, event) => {
+    const config = await supabaseOptions(event);
+
+    removeAuthCookies(event);
+
+    throw event.redirect(302, config.signInPath);
+  });
+
+  const onRequest = async (event: RequestEvent) => {
+    if (!isServer) {
+      return;
     }
+
+    console.log("event", event);
+
+    const config = await supabaseOptions(event);
+
+    const supabase = createClient<Database, SchemaName, Schema>(
+      config.supabaseUrl,
+      config.supabaseKey,
+      {
+        ...config.options,
+        auth: { persistSession: false, ...config.options?.auth },
+      }
+    );
+
+    event.sharedMap.set(supabaseSharedKey, supabase);
+
+    console.log("search", event.url.search);
+
+    const value = event.cookie.get(cookieName)?.json();
+
+    console.log("value", value);
+
+    const parsed = z
+      .object({ access_token: z.string(), refresh_token: z.string() })
+      .safeParse(value);
+
+    if (!parsed.success) {
+      return;
+    }
+
+    const userResponse = await supabase.auth.setSession(parsed.data);
+
+    if (userResponse.data.session) {
+      event.sharedMap.set(sessionSharedKey, userResponse.data.session);
+      return;
+    }
+
+    const refreshResponse = await supabase.auth.refreshSession({
+      refresh_token: parsed.data.refresh_token,
+    });
+
+    if (!refreshResponse.data.session) {
+      removeAuthCookies(event);
+      return;
+    }
+
+    const session = refreshResponse.data.session;
+    updateAuthCookies(event, session);
+
+    event.sharedMap.set(sessionSharedKey, session);
   };
 
   return {
     getSupabaseInstance,
     getSupabaseSession,
     onRequest,
-    useSupabaseSession,
-    useSupabaseSetSession,
-    useSupabaseSignInWithIdToken,
     useSupabaseSignInWithOAuth,
     useSupabaseSignInWithOtp,
     useSupabaseSignInWithPassword,
-    useSupabaseSignInWithSSO,
     useSupabaseSignOut,
     useSupabaseSignUp,
   };

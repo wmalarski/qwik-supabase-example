@@ -5,8 +5,6 @@ export const {
   getSupabaseInstance,
   getSupabaseSession,
   onRequest,
-  useSupabaseSession,
-  useSupabaseSetSession,
   useSupabaseSignInWithOAuth,
   useSupabaseSignInWithOtp,
   useSupabaseSignInWithPassword,
@@ -21,7 +19,10 @@ export const {
     });
 
   return {
+    emailRedirectTo: "/auth/callback",
     options: { auth: { flowType: "pkce" } },
+    signInPath: "/auth/signIn",
+    signInRedirectTo: "/",
     supabaseKey: parsed.supabaseKey,
     supabaseUrl: parsed.supabaseUrl,
   };
