@@ -7,13 +7,10 @@ import {
   zod$,
   type DocumentHead,
 } from "@builder.io/qwik-city";
-import { getUserFromEvent } from "~/server/auth/auth";
-import { createSupabase } from "~/server/auth/supabase";
+import { getSupabaseInstance, getSupabaseSession } from "../plugin";
 
 export const useTasks = routeLoader$(async (event) => {
-  await getUserFromEvent(event);
-
-  const supabase = createSupabase(event);
+  const supabase = getSupabaseInstance(event);
 
   const { data } = await supabase.from("Task").select();
 
@@ -22,17 +19,17 @@ export const useTasks = routeLoader$(async (event) => {
 
 export const useInsertTask = routeAction$(
   async (args, event) => {
-    const user = await getUserFromEvent(event);
+    const session = getSupabaseSession(event);
 
-    if (!user) {
+    if (!session) {
       throw event.error(400, "Unauthorized");
     }
 
-    const supabase = createSupabase(event);
+    const supabase = getSupabaseInstance(event);
 
     const result = await supabase
       .from("Task")
-      .insert({ test: args.text, user_id: user.id });
+      .insert({ test: args.text, user_id: session.user.id });
 
     return result;
   },
@@ -43,13 +40,13 @@ export const useInsertTask = routeAction$(
 
 export const useDeleteTask = routeAction$(
   async (args, event) => {
-    const user = await getUserFromEvent(event);
+    const session = getSupabaseSession(event);
 
-    if (!user) {
+    if (!session) {
       throw event.error(400, "Unauthorized");
     }
 
-    const supabase = createSupabase(event);
+    const supabase = getSupabaseInstance(event);
 
     const result = await supabase.from("Task").delete().eq("id", args.id);
 
