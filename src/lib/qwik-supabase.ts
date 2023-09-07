@@ -125,7 +125,7 @@ export const serverSupabaseQrl = <
         });
       }
 
-      throw event.redirect(302, result.data.url);
+      return result.data;
     },
     zod$({
       provider: z.string(),
@@ -225,6 +225,7 @@ export const serverSupabaseQrl = <
       }
 
       const tokenResponse = await supabase.auth.exchangeCodeForSession(code);
+
       if (tokenResponse.error) {
         throw event.error(400, "Invalid request");
       }
